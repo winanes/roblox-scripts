@@ -1797,6 +1797,109 @@ task.spawn(function()
 end)
 
 
+local AimbotTarget = nil
+local SilentTarget = nil
+local RageTarget = nil
+
+local function GetClosestTargetPart(fovRadius, hitPartName, teamCheck, wallCheck)
+    local Camera = workspace.CurrentCamera
+    if not Camera then return nil end
+
+    local mousePos = UserInputService:GetMouseLocation()
+    local closestPart = nil
+    local shortestDistance = fovRadius or 150
+
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character then
+            local isEnemy = true
+            if teamCheck then
+                isEnemy = IsEnemy(player)
+            end
+
+            if isEnemy then
+                local char = player.Character
+                local part = char:FindFirstChild(hitPartName) 
+                    or char:FindFirstChild("Head") 
+                    or char:FindFirstChild("HumanoidRootPart")
+                    or char:FindFirstChild("Torso")
+                    or char:FindFirstChild("UpperTorso")
+
+                if part and not char:GetAttribute("Dead") and not char:GetAttribute("Invincible") then
+                    local visible = true
+                    if wallCheck then
+                        local raycastParams = RaycastParams.new()
+                        raycastParams.FilterType = Enum.RaycastFilterType.Exclude
+                        raycastParams.FilterDescendantsInstances = {LocalPlayer.Character, Camera}
+                        raycastParams.IgnoreWater = true
+
+                        local rayDirection = part.Position - Camera.CFrame.Position
+                        local rayResult = workspace:Raycast(Camera.CFrame.Position, rayDirection, raycastParams)
+                        if rayResult and rayResult.Instance and not rayResult.Instance:IsDescendantOf(char) then
+                            visible = false
+                        end
+                    end
+
+                    if visible then
+                        local screenPos, onScreen = Camera:WorldToViewportPoint(part.Position)
+                        if onScreen and screenPos.Z > 0 then
+                            local distance = (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
+                            if distance < shortestDistance then
+                                shortestDistance = distance
+                                closestPart = part
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    return closestPart
+end
+
+RunService.RenderStepped:Connect(function()
+    pcall(function()
+        if Toggles.Aimbot and Toggles.Aimbot.Value then
+            local fov = Options.AimbotFovCircleRadius and Options.AimbotFovCircleRadius.Value or 150
+            local hitPart = Options.AimbotHitPart and Options.AimbotHitPart.Value or "Head"
+            local teamCheck = Toggles.AimbotTeamCheck and Toggles.AimbotTeamCheck.Value
+            local wallCheck = Toggles.AimbotWallCheck and Toggles.AimbotWallCheck.Value
+            AimbotTarget = GetClosestTargetPart(fov, hitPart, teamCheck, wallCheck)
+        else
+            AimbotTarget = nil
+        end
+
+        if Toggles.SilentAim and Toggles.SilentAim.Value then
+            local fov = Options.SilentFovCircleRadius and Options.SilentFovCircleRadius.Value or 150
+            local hitPart = Options.SilentHitPart and Options.SilentHitPart.Value or "Head"
+            local teamCheck = Toggles.SilentTeamCheck and Toggles.SilentTeamCheck.Value
+            local wallCheck = Toggles.SilentWallbang and not Toggles.SilentWallbang.Value
+            SilentTarget = GetClosestTargetPart(fov, hitPart, teamCheck, wallCheck)
+        else
+            SilentTarget = nil
+        end
+    end)
+end)
+
+pcall(function()
+    RunService:UnbindFromRenderStep("MessageAimbotRender")
+end)
+
+RunService:BindToRenderStep("MessageAimbotRender", Enum.RenderPriority.Camera.Value + 1, function()
+    if Toggles.Aimbot and Toggles.Aimbot.Value and AimbotTarget then
+        local isHolding = true
+        if Options.AimbotHoldkey then
+            isHolding = Options.AimbotHoldkey:GetState()
+        end
+        if isHolding then
+            local Camera = workspace.CurrentCamera
+            if Camera then
+                Camera.CFrame = CFrame.lookAt(Camera.CFrame.Position, AimbotTarget.Position)
+            end
+        end
+    end
+end)
+
 local oldUpdateCam
 local succes, errorms = pcall(function(...)
     oldUpdateCam = hookfunction(updateCam, function(p1)
