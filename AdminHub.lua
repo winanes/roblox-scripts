@@ -527,11 +527,23 @@ local function getClosestPlayerToCursor()
 
     for _, player in pairs(Players:GetPlayers()) do
         if player ~= LocalPlayer and player.Character then
-            local isSameTeam = aimbotTeamCheck and player.Team and LocalPlayer.Team and player.Team == LocalPlayer.Team
-            if not isSameTeam then
+            local isTeammate = false
+            if aimbotTeamCheck then
+                if player.Team and LocalPlayer.Team and player.Team == LocalPlayer.Team then
+                    isTeammate = true
+                elseif player.TeamColor and LocalPlayer.TeamColor and player.TeamColor == LocalPlayer.TeamColor then
+                    isTeammate = true
+                end
+            end
+
+            if not isTeammate then
                 local char = player.Character
                 local hum = char:FindFirstChildOfClass("Humanoid")
-                local part = char:FindFirstChild(aimbotTargetPart) or char:FindFirstChild("Head") or char:FindFirstChild("HumanoidRootPart")
+                local part = char:FindFirstChild(aimbotTargetPart)
+                    or char:FindFirstChild("Head")
+                    or char:FindFirstChild("HumanoidRootPart")
+                    or char:FindFirstChild("Torso")
+                    or char:FindFirstChild("UpperTorso")
 
                 if hum and hum.Health > 0 and part then
                     local visible = true
@@ -543,14 +555,14 @@ local function getClosestPlayerToCursor()
 
                         local rayDirection = part.Position - Camera.CFrame.Position
                         local rayResult = workspace:Raycast(Camera.CFrame.Position, rayDirection, raycastParams)
-                        if rayResult and not rayResult.Instance:IsDescendantOf(char) then
+                        if rayResult and rayResult.Instance and not rayResult.Instance:IsDescendantOf(char) then
                             visible = false
                         end
                     end
 
                     if visible then
-                        local screenPos, onScreen = Camera:WorldToScreenPoint(part.Position)
-                        if onScreen then
+                        local screenPos, onScreen = Camera:WorldToViewportPoint(part.Position)
+                        if onScreen and screenPos.Z > 0 then
                             local distance = (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
                             if distance < shortestDistance then
                                 shortestDistance = distance
@@ -566,12 +578,17 @@ local function getClosestPlayerToCursor()
     return closestPlayer
 end
 
-RunService.RenderStepped:Connect(function()
+pcall(function()
+    RunService:UnbindFromRenderStep("AdminHubAimbot")
+end)
+
+RunService:BindToRenderStep("AdminHubAimbot", Enum.RenderPriority.Camera.Value + 1, function()
     local Camera = workspace.CurrentCamera
+    if not Camera then return end
     local mousePos = UserInputService:GetMouseLocation()
 
     -- FOV Circle Rendering
-    if showFovCircle and aimbotEnabled and Camera then
+    if showFovCircle and aimbotEnabled then
         if fovCircleDrawing then
             fovCircleDrawing.Position = mousePos
             fovCircleDrawing.Radius = aimbotFovRadius
@@ -587,18 +604,22 @@ RunService.RenderStepped:Connect(function()
     end
 
     -- Aimbot Tracking
-    if aimbotEnabled and Camera then
+    if aimbotEnabled then
         local isHolding = UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2)
         local shouldAim = not aimbotRequireHold or isHolding
 
         if shouldAim then
             local targetPlayer = getClosestPlayerToCursor()
             if targetPlayer and targetPlayer.Character then
-                local part = targetPlayer.Character:FindFirstChild(aimbotTargetPart) or targetPlayer.Character:FindFirstChild("Head")
+                local part = targetPlayer.Character:FindFirstChild(aimbotTargetPart)
+                    or targetPlayer.Character:FindFirstChild("Head")
+                    or targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+                    or targetPlayer.Character:FindFirstChild("Torso")
+                    or targetPlayer.Character:FindFirstChild("UpperTorso")
                 if part then
-                    local targetCFrame = CFrame.new(Camera.CFrame.Position, part.Position)
+                    local targetCFrame = CFrame.lookAt(Camera.CFrame.Position, part.Position)
                     if aimbotSmoothness > 0 then
-                        local alpha = math.clamp(1 - aimbotSmoothness, 0.05, 1)
+                        local alpha = math.clamp(1 - (aimbotSmoothness * 0.08), 0.05, 1)
                         Camera.CFrame = Camera.CFrame:Lerp(targetCFrame, alpha)
                     else
                         Camera.CFrame = targetCFrame
