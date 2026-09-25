@@ -441,7 +441,7 @@ local function toggleFly(enable)
         task.spawn(function()
             while flying do
                 local cam = workspace.CurrentCamera
-                local dir = Vector3.zero
+                local dir = Vector3.new(0, 0, 0)
                 if UserInputService:IsKeyDown(Enum.KeyCode.W) then dir = dir + cam.CFrame.LookVector end
                 if UserInputService:IsKeyDown(Enum.KeyCode.S) then dir = dir - cam.CFrame.LookVector end
                 if UserInputService:IsKeyDown(Enum.KeyCode.A) then dir = dir - cam.CFrame.RightVector end
@@ -527,37 +527,36 @@ local function getClosestPlayerToCursor()
 
     for _, player in pairs(Players:GetPlayers()) do
         if player ~= LocalPlayer and player.Character then
-            -- Team check
-            if aimbotTeamCheck and player.Team and LocalPlayer.Team and player.Team == LocalPlayer.Team then
-                continue
-            end
+            local isSameTeam = aimbotTeamCheck and player.Team and LocalPlayer.Team and player.Team == LocalPlayer.Team
+            if not isSameTeam then
+                local char = player.Character
+                local hum = char:FindFirstChildOfClass("Humanoid")
+                local part = char:FindFirstChild(aimbotTargetPart) or char:FindFirstChild("Head") or char:FindFirstChild("HumanoidRootPart")
 
-            local char = player.Character
-            local hum = char:FindFirstChildOfClass("Humanoid")
-            local part = char:FindFirstChild(aimbotTargetPart) or char:FindFirstChild("Head") or char:FindFirstChild("HumanoidRootPart")
+                if hum and hum.Health > 0 and part then
+                    local visible = true
+                    if aimbotWallCheck then
+                        local raycastParams = RaycastParams.new()
+                        raycastParams.FilterType = Enum.RaycastFilterType.Exclude
+                        raycastParams.FilterDescendantsInstances = {LocalPlayer.Character, Camera}
+                        raycastParams.IgnoreWater = true
 
-            if hum and hum.Health > 0 and part then
-                -- Wall check / Visibility check
-                if aimbotWallCheck then
-                    local raycastParams = RaycastParams.new()
-                    raycastParams.FilterType = Enum.RaycastFilterType.Exclude
-                    raycastParams.FilterDescendantsInstances = {LocalPlayer.Character, Camera}
-                    raycastParams.IgnoreWater = true
-
-                    local rayDirection = part.Position - Camera.CFrame.Position
-                    local rayResult = workspace:Raycast(Camera.CFrame.Position, rayDirection, raycastParams)
-                    if rayResult and not rayResult.Instance:IsDescendantOf(char) then
-                        continue -- Blocked by wall
+                        local rayDirection = part.Position - Camera.CFrame.Position
+                        local rayResult = workspace:Raycast(Camera.CFrame.Position, rayDirection, raycastParams)
+                        if rayResult and not rayResult.Instance:IsDescendantOf(char) then
+                            visible = false
+                        end
                     end
-                end
 
-                -- Screen projection check (WorldToScreenPoint matches GetMouseLocation)
-                local screenPos, onScreen = Camera:WorldToScreenPoint(part.Position)
-                if onScreen then
-                    local distance = (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
-                    if distance < shortestDistance then
-                        shortestDistance = distance
-                        closestPlayer = player
+                    if visible then
+                        local screenPos, onScreen = Camera:WorldToScreenPoint(part.Position)
+                        if onScreen then
+                            local distance = (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
+                            if distance < shortestDistance then
+                                shortestDistance = distance
+                                closestPlayer = player
+                            end
+                        end
                     end
                 end
             end
